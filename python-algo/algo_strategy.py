@@ -76,6 +76,59 @@ class AlgoStrategy(gamelib.AlgoCore):
         game_state.submit_turn()
 
 
+    def trivial_strategy(self, game_state):
+        """
+        trivial algo
+        """
+        # build initial defenses
+        self.initialize_defenses(game_state)
+
+        # attack
+        self.send_pings_if_survive(game_state)
+        self.send_emp(game_state)
+        self.send_scramblers(game_state)
+
+    def send_pings_if_survive(self, game_state):
+        possibleSpawnLocations = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_RIGHT)
+        location = self.least_damage_spawn_location(game_state,
+                self.filter_blocked_locations(possibleSpawnLocations, game_state))
+        numPings = math.floor(game_state.get_resource(BITS) / game_state.type_cost(PING))
+        if self.does_survive(game_state, location, numPings):
+            for _ in range(numPings):
+                game_state.attempt_spawn(PING, location)
+
+    def does_survive(self, game_state, location, numPings):
+        path = game_state.find_path_to_edge(location)
+        damage = 0
+        for path_location in path:
+            # Get number of enemy destructors that can attack the final location and multiply by destructor damage
+            damage += len(
+                game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(
+                DESTRUCTOR, game_state.config).damage
+        return numPings - damage > 0
+
+    def send_scramblers(self, game_state):
+        possibleSpawnLocations = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_RIGHT)
+        location = self.least_damage_spawn_location(game_state,
+                self.filter_blocked_locations(possibleSpawnLocations, game_state))
+        numScrambler = math.floor(game_state.get_resource(BITS) / game_state.type_cost(SCRAMBLER))
+        for _ in range(numScrambler):
+            game_state.attempt_spawn(SCRAMBLER, location)
+
+    def send_emp(self, game_state):
+        possibleSpawnLocations = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_RIGHT)
+        location = self.least_damage_spawn_location(game_state,
+                self.filter_blocked_locations(possibleSpawnLocations, game_state))
+        numEMP = math.floor(game_state.get_resource(BITS) / game_state.type_cost(EMP))
+        for _ in range(numEMP):
+            game_state.attempt_spawn(numEMP, location)
+
     """
     NOTE: All the methods after this point are part of the sample starter-algo
     strategy and can safely be replaced for your custom algo.
