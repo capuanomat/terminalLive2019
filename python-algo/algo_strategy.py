@@ -114,10 +114,11 @@ class AlgoStrategy(gamelib.AlgoCore):
             game_state.game_map.BOTTOM_RIGHT)
 
         # spawn defenses
+        spawn_locations = []
         for s in sorted(self.map_values.items(), key=operator.itemgetter(1)):
-            if s not in friendly_edges and game_state.get_resource(CORES) > 0:
-                game_state.attempt_spawn(DESTRUCTOR, [s[0], s[1]])
-    #     spawn defense
+            if s not in friendly_edges:
+                spawn_locations.append([s[0], s[1]])
+        game_state.attempt_spawn(DESTRUCTOR, spawn_locations)
 
     def send_pings_if_survive(self, game_state):
         possibleSpawnLocations = game_state.game_map.get_edge_locations(
