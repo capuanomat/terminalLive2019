@@ -88,11 +88,13 @@ class AlgoStrategy(gamelib.AlgoCore):
         For offense we will use long range EMPs if they place stationary units near the enemy's front.
         If there are no stationary units to attack in the front, we will send Pings to try and score quickly.
         """
+        # --- DEFENSE --- #
+        # First, update the map
+        update_map(game_state)
         # First, place basic defenses
         self.build_defences(game_state)
-        # Now build reactive defenses based on where the enemy scored
-        self.build_reactive_defense(game_state)
 
+        # --- OFFENSE --- #
         # If the turn is less than 5, stall with Scramblers and wait to see enemy's base
         if game_state.turn_number < 5:
             self.stall_with_scramblers(game_state)
@@ -115,6 +117,27 @@ class AlgoStrategy(gamelib.AlgoCore):
                 # Lastly, if we have spare cores, let's build some Encryptors to boost our Pings' health.
                 encryptor_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
                 game_state.attempt_spawn(ENCRYPTOR, encryptor_locations)
+
+    def update_map(self, game_state):
+        # For every location along the barrier that was struck, we decrease the value by 100
+        for location in self.scored_on_locations:
+            self.map_values[(location[0], location[1])] -= self.damaged_cost_decrement
+
+        for location in self.enemy_attacker_spawn_locations:
+            path = game_state.find_path_to_edge(location)
+            damage = 0
+            for path_location in path:
+                # Adding damage done by all destructors that can attack that location
+                damage += len(game_state.get_attackers(path_location, 1)) * \
+                            gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
+
+                damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
+                          gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
+
+                if (path_location in self.map_values):
+                    self.map_values[(path_location[0], path_location[1])] -= damage
+
+        return self.map_values
 
     def build_defences(self, game_state):
         """
@@ -143,38 +166,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             # Build destructor one space above so that it doesn't block our own edge spawn locations
             build_location = [location[0], location[1]+1]
             game_state.attempt_spawn(DESTRUCTOR, build_location)
-
-    """
-    Input parameters
-    @game_state: Parameter holding variables related to game structur and state
-    @location_options: Should be all the locations where an enemy can spawn an attacker
-    @curr_values: Map holding the current values for each state 
-    """
-    def update_map(self, game_state, location_options, curr_values):
-
-        # For every location along the barrier that was struck, we decrease the value by 100
-        for location in self.scored_on_locations:
-            curr_values[(location[0], location[1])] -= 100
-
-        damages = []
-        for location in location_options:
-            path = game_state.find_path_to_edge(location)
-            damage = 0
-            for path_location in path:
-                # Adding damage done by all destructors that can attack that location
-                damage += len(game_state.get_attackers(path_location, 1)) * \
-                            gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
-                # Adding the damage done by all encryptors that can attack that location
-                damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
-                          gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
-
-                if (path_location in curr_values):
-                    curr_values[(path_location[0], path_location[1])] -= damage
-
-            damages.append(damage)
-
-        # Get the location that takes the most damage
-        most_damaged = location_options[damages.index(max(damages))]
 
 
     def stall_with_scramblers(self, game_state):
