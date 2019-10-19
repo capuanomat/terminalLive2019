@@ -587,18 +587,14 @@ class GameState:
 
     def get_possible_actions(self, state):
         transform = [[0, 1], [1, 0], [0, -1], [-1, 0]]
+        valid_states = self.get_defensive_states()
         ret = []
         for t in transform:
-            newState = [state[0] + t[0], state[1] + t[1]]
-            if self.game_map.in_bottom_half(newState):
+            newState = (state[0] + t[0], state[1] + t[1])
+            if newState in valid_states:
                 ret.append(newState)
         return ret
 
 
     def get_defensive_states(self):
-        states = []
-        for i in range(27):
-            for j in range(13):
-                if j >= i and j <= 27 - i
-                    states.append([[j, 13 - i])
-        return states
+        return [(x, y) for y in range(14) for x in range(13 - y, 15 + y)]

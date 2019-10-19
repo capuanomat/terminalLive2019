@@ -4,7 +4,7 @@ import math
 import warnings
 from sys import maxsize
 import json
-import util
+import operator
 
 
 """
@@ -49,10 +49,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.damaged_cost_decrement = 50
         self.left_enemy_edge = [(x, x + 14) for x in range(14)]
         self.right_enemy_edge = [(i + 14, 27 - i) for i in range(14)]
-        self.enemy_attacker_spawn_locations = left_enemy_edge + right_enemy_edge
+        self.enemy_attacker_spawn_locations = self.left_enemy_edge + self.right_enemy_edge
 
         # Create the Value map for Value Iteration
-        self.map_values = [(x, y) for y in range(14) for x in range(13 - y, 15 + y)]
+        self.map_values = {(x, y) : 0 for y in range(14) for x in range(13 - y, 15 + y)}
 
 
     def on_turn(self, turn_state):
@@ -86,7 +86,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         # --- DEFENSE --- #
         # First, update the map
         self.update_map(game_state)
-        self.value_iteration(0.9, 100)
+        self.value_iteration(game_state, 0.9, 100)
         # First, place basic defenses
         self.spawn_defense(game_state)
 
@@ -98,12 +98,13 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def value_iteration(self, game_state, discount, iterations):
         # create value_map
-        np1Values = util.Counter()
+        np1Values = {(x, y) : 0 for y in range(14) for x in range(13 - y, 15 + y)}
+
         for __ in range(iterations):
             for s in game_state.get_defensive_states():
-                np1Values[s] = self.map_values(s) + discount * \
+                np1Values[s] = self.map_values[s] + discount * \
                         max([self.map_values[a] for a in
-                        game_state.get_possible_actions(s)])
+                        game_state.get_possible_actions([s[0], s[1]])])
             self.map_values = np1Values.copy()
 
     def spawn_defense(self, game_state):
@@ -113,9 +114,9 @@ class AlgoStrategy(gamelib.AlgoCore):
             game_state.game_map.BOTTOM_RIGHT)
 
         # spawn defenses
-        for s in self.map_values.sortedKeys():
-            if s not in friendly_edges and game_state.get_resources(CORES) > 0:
-                game_state.attempt_spawn(DESTRUCTOR, s)
+        for s in sorted(self.map_values.items(), key=operator.itemgetter(1)):
+            if s not in friendly_edges and game_state.get_resource(CORES) > 0:
+                game_state.attempt_spawn(DESTRUCTOR, [s[0], s[1]])
     #     spawn defense
 
     def send_pings_if_survive(self, game_state):
@@ -166,7 +167,7 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.map_values[(location[0], location[1])] -= self.damaged_cost_decrement
 
         for location in self.enemy_attacker_spawn_locations:
-            path = game_state.find_path_to_edge(location)
+            path = game_state.find_path_to_edge([location[0], location[1]])
             damage = 0
             for path_location in path:
                 # Adding damage done by all destructors that can attack that location
@@ -176,7 +177,7 @@ class AlgoStrategy(gamelib.AlgoCore):
                 damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
                           gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
 
-                if (path_location in self.map_values):
+                if (path_location[0], path_location[1]) in self.map_values:
                     self.map_values[(path_location[0], path_location[1])] -= damage
 
 
