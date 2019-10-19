@@ -46,6 +46,11 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.scored_on_locations = []
         self.values = util.Counter()
 
+        # Decrement cost of a state by this much when it hits our boundary
+        self.damaged_cost_decrement = 50
+        self.left_enemy_edge = [(x, x + 14) for x in range(14)]
+        self.right_enemy_edge = [(i + 14, 27 - i) for i in range(14)]
+        self.enemy_attacker_spawn_locations = left_enemy_edge + right_enemy_edge
     
         
 
@@ -136,8 +141,6 @@ class AlgoStrategy(gamelib.AlgoCore):
 
                 if (path_location in self.map_values):
                     self.map_values[(path_location[0], path_location[1])] -= damage
-
-        return self.map_values
 
     def build_defences(self, game_state):
         """
