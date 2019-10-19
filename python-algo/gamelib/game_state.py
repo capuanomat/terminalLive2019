@@ -556,31 +556,3 @@ class GameState:
                 if unit.unit_type == DESTRUCTOR and unit.player_index != player_index:
                     attackers.append(unit)
         return attackers
-
-    def get_attackers_encryptors(self, location, player_index):
-        """Gets the encryptors threatening a given location
-
-        Args:
-            location: The location of a hypothetical defender
-            player_index: The index corresponding to the defending player, 0 for you 1 for the enemy
-
-        Returns:
-            A list of destructors that would attack a unit controlled by the given player at the given location
-
-        """
-
-        if not player_index == 0 and not player_index == 1:
-            self._invalid_player_index(player_index)
-        if not self.game_map.in_arena_bounds(location):
-            self.warn("Location {} is not in the arena bounds.".format(location))
-
-        attackers = []
-        """
-        Get locations in the range of ENCRYPTOR units
-        """
-        possible_locations= self.game_map.get_locations_in_range(location, self.config["unitInformation"][UNIT_TYPE_TO_INDEX[ENCRYPTOR]]["range"])
-        for location in possible_locations:
-            for unit in self.game_map[location]:
-                if unit.unit_type == ENCRYPTOR and unit.player_index != player_index:
-                    attackers.append(unit)
-        return attackers

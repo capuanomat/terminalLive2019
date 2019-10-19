@@ -113,13 +113,13 @@ class AlgoStrategy(gamelib.AlgoCore):
         # More community tools available at: https://terminal.c1games.com/rules#Download
 
         # Place destructors that attack enemy units
-        destructor_locations = [[0, 13], [1, 13], [2, 13], [3, 13], [4, 13]]
+        destructor_locations = [[0, 13], [27, 13], [8, 11], [19, 11], [13, 11], [14, 11]]
         # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
         game_state.attempt_spawn(DESTRUCTOR, destructor_locations)
         
         # Place filters in front of destructors to soak up damage for them
-        #filter_locations = [[8, 12], [19, 12]]
-        #game_state.attempt_spawn(FILTER, filter_locations)
+        filter_locations = [[8, 12], [19, 12]]
+        game_state.attempt_spawn(FILTER, filter_locations)
 
     def build_reactive_defense(self, game_state):
         """
@@ -131,39 +131,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             # Build destructor one space above so that it doesn't block our own edge spawn locations
             build_location = [location[0], location[1]+1]
             game_state.attempt_spawn(DESTRUCTOR, build_location)
-
-    """
-    Input parameters
-    @game_state: Parameter holding variables related to game structur and state
-    @location_options: Should be all the locations where an enemy can spawn an attacker
-    @curr_values: Map holding the current values for each state 
-    """
-    def update_map(self, game_state, location_options, curr_values):
-
-        # For every location along the barrier that was struck, we decrease the value by 100
-        for location in self.scored_on_locations:
-            curr_values[(location[0], location[1])] -= 100
-
-        damages = []
-        for location in location_options:
-            path = game_state.find_path_to_edge(location)
-            damage = 0
-            for path_location in path:
-                # Adding damage done by all destructors that can attack that location
-                damage += len(game_state.get_attackers(path_location, 1)) * \
-                            gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
-                # Adding the damage done by all encryptors that can attack that location
-                damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
-                          gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
-
-                if (path_location in curr_values):
-                    curr_values[(path_location[0], path_location[1])] -= damage
-
-            damages.append(damage)
-
-        # Get the location that takes the most damage
-        most_damaged = location_options[damages.index(max(damages))]
-
 
     def stall_with_scramblers(self, game_state):
         """
