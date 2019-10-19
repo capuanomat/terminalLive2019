@@ -103,6 +103,17 @@ class GameMap:
 
         return bottom_half_check or top_half_check
 
+    def in_bottom_half(self, location):
+        x, y = location
+        half_board = self.HALF_ARENA
+
+        row_size = (self.ARENA_SIZE - 1 - y) + 1
+        startx = half_board - row_size
+        endx = startx + (2 * row_size) - 1
+        bottom_half_check = (y >= self.HALF_ARENA and x >= startx and x <= endx)
+
+        return bottom_half_check
+
     def get_edge_locations(self, quadrant_description):
         """Takes in an edge description and returns a list of locations.
         

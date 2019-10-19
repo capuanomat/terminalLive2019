@@ -4,6 +4,7 @@ import math
 import warnings
 from sys import maxsize
 import json
+import util
 
 
 """
@@ -43,6 +44,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         CORES = 1
         # This is a good place to do initial setup
         self.scored_on_locations = []
+        self.values = util.Counter()
 
     
         
@@ -62,14 +64,11 @@ class AlgoStrategy(gamelib.AlgoCore):
         # create value_map
         iterations = 1000
         discount = 0.9
-        self.values = util.Counter()
         np1Values = util.Counter()
         for __ in range(iterations):
-            for s in mdp.getStates():
+            for s in game_state.get_defensive_states():
                 np1Values[s] = self.value(s) + discount * max([self.values[a]
-                                                               for a in
-                                                               game_state.get_possible_actions(
-                                                                   s)])
+                        for a in game_state.get_possible_actions(s)])
             self.values = np1Values.copy()
 
         self.trivial_strategy(game_state)

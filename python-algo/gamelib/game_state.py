@@ -584,3 +584,21 @@ class GameState:
                 if unit.unit_type == ENCRYPTOR and unit.player_index != player_index:
                     attackers.append(unit)
         return attackers
+
+    def get_possible_actions(self, state):
+        transform = [[0, 1], [1, 0], [0, -1], [-1, 0]]
+        ret = []
+        for t in transform:
+            newState = [state[0] + t[0], state[1] + t[1]]
+            if self.game_map.in_bottom_half(newState):
+                ret.append(newState)
+        return ret
+
+
+    def get_defensive_states(self):
+        states = []
+        for i in range(27):
+            for j in range(13):
+                if j >= i and j <= 27 - i
+                    states.append([[j, 13 - i])
+        return states
