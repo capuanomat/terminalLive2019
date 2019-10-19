@@ -59,7 +59,20 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
 
-        self.starter_strategy(game_state)
+        # create value_map
+        iterations = 1000
+        discount = 0.9
+        self.values = util.Counter()
+        np1Values = util.Counter()
+        for __ in range(iterations):
+            for s in mdp.getStates():
+                np1Values[s] = self.value(s) + discount * max([self.values[a]
+                                                               for a in
+                                                               game_state.get_possible_actions(
+                                                                   s)])
+            self.values = np1Values.copy()
+
+        self.trivial_strategy(game_state)
 
         game_state.submit_turn()
 
