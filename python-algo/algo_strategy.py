@@ -55,6 +55,16 @@ class AlgoStrategy(gamelib.AlgoCore):
         # Create the Value map for Value Iteration
         self.map_values = [(x, y) for y in range(14) for x in range(13 - y, 15 + y)]
 
+    def value_iteration(self, game_state, discount, iterations):
+        # create value_map
+        np1Values = util.Counter()
+        for __ in range(iterations):
+            for s in game_state.get_defensive_states():
+                np1Values[s] = self.map_values(s) + discount * \
+                        max([self.map_values[a] for a in
+                        game_state.get_possible_actions(s)])
+            self.map_values = np1Values.copy()
+
     def on_turn(self, turn_state):
         """
         This function is called every turn with the game state wrapper as
@@ -66,16 +76,6 @@ class AlgoStrategy(gamelib.AlgoCore):
         game_state = gamelib.GameState(self.config, turn_state)
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
-
-        # create value_map
-        iterations = 1000
-        discount = 0.9
-        np1Values = util.Counter()
-        for __ in range(iterations):
-            for s in game_state.get_defensive_states():
-                np1Values[s] = self.value(s) + discount * max([self.values[a]
-                        for a in game_state.get_possible_actions(s)])
-            self.values = np1Values.copy()
 
         self.trivial_strategy(game_state)
 
@@ -93,6 +93,18 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.send_pings_if_survive(game_state)
         self.send_emp(game_state)
         self.send_scramblers(game_state)
+
+    def spawn_defense(self, game_state):
+        # friendly edges
+        friendly_edges = game_state.game_map.get_edge_locations(
+            game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+            game_state.game_map.BOTTOM_RIGHT)
+
+        # spawn defenses
+        for s in self.map_values.sortedKeys():
+            if s not in friendly_edges and game_state.get_resources(CORES) > 0:
+                game_state.attempt_spawn(DESTRUCTOR, s)
+    #     spawn defense
 
     def send_pings_if_survive(self, game_state):
         possibleSpawnLocations = game_state.game_map.get_edge_locations(
