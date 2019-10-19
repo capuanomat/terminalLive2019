@@ -51,8 +51,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.left_enemy_edge = [(x, x + 14) for x in range(14)]
         self.right_enemy_edge = [(i + 14, 27 - i) for i in range(14)]
         self.enemy_attacker_spawn_locations = left_enemy_edge + right_enemy_edge
-    
-        
+
+        # Create the Value map for Value Iteration
+        self.map_values = [(x, y) for y in range(14) for x in range(13 - y, 15 + y)]
 
     def on_turn(self, turn_state):
         """
