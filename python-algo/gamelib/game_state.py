@@ -583,6 +583,7 @@ class GameState:
             for unit in self.game_map[location]:
                 if unit.unit_type == ENCRYPTOR and unit.player_index != player_index:
                     attackers.append(unit)
+
         return attackers
 
     def get_possible_actions(self, state):
