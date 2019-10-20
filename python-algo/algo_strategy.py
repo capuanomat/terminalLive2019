@@ -4,6 +4,7 @@ import math
 import warnings
 from sys import maxsize
 import json
+import operator
 
 
 """
@@ -45,13 +46,17 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.scored_on_locations = []
 
         # Decrement cost of a state by this much when it hits our boundary
-        self.damaged_cost_decrement = 50
+        self.damaged_cost_decrement = 100
         self.left_enemy_edge = [(x, x + 14) for x in range(14)]
         self.right_enemy_edge = [(i + 14, 27 - i) for i in range(14)]
-        self.enemy_attacker_spawn_locations = left_enemy_edge + right_enemy_edge
-        
+        self.enemy_attacker_spawn_locations = self.left_enemy_edge + self.right_enemy_edge
+
+        # Create the Value map for Value Iteration
+        self.map_values = {(x, y) : 0 for y in range(14) for x in range(13 - y, 15 + y)}
+
 
     def on_turn(self, turn_state):
+        gamelib.debug_write(self.map_values)
         """
         This function is called every turn with the game state wrapper as
         an argument. The wrapper stores the state of the arena and has methods
@@ -63,101 +68,122 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
 
-        self.starter_strategy(game_state)
+        self.defense_offense_strategy(game_state)
 
         game_state.submit_turn()
 
-
     """
-    NOTE: All the methods after this point are part of the sample starter-algo
-    strategy and can safely be replaced for your custom algo.
+        NOTE: All the methods after this point are part of the sample starter-algo
+        strategy and can safely be replaced for your custom algo.
     """
 
-    def starter_strategy(self, game_state):
+    def defense_offense_strategy(self, game_state):
         """
-        For defense we will use a spread out layout and some Scramblers early on.
-        We will place destructors near locations the opponent managed to score on.
-        For offense we will use long range EMPs if they place stationary units near the enemy's front.
-        If there are no stationary units to attack in the front, we will send Pings to try and score quickly.
-        """
+                For defense we will use a spread out layout and some Scramblers early on.
+                We will place destructors near locations the opponent managed to score on.
+                For offense we will use long range EMPs if they place stationary units near the enemy's front.
+                If there are no stationary units to attack in the front, we will send Pings to try and score quickly.
+                """
         # --- DEFENSE --- #
         # First, update the map
-        update_map(game_state)
+        self.update_map(game_state)
+        self.value_iteration(game_state, self.map_values, 0.9, 100)
         # First, place basic defenses
-        self.build_defences(game_state)
+        self.spawn_defense(game_state)
 
         # --- OFFENSE --- #
-        # If the turn is less than 5, stall with Scramblers and wait to see enemy's base
-        if game_state.turn_number < 5:
-            self.stall_with_scramblers(game_state)
-        else:
-            # Now let's analyze the enemy base to see where their defenses are concentrated.
-            # If they have many units in the front we can build a line for our EMPs to attack them at long range.
-            if self.detect_enemy_unit(game_state, unit_type=None, valid_x=None, valid_y=[14, 15]) > 10:
-                self.emp_line_strategy(game_state)
-            else:
-                # They don't have many units in the front so lets figure out their least defended area and send Pings there.
+        self.send_pings_if_survive(game_state)
+        # self.send_emp(game_state)
+        # self.send_scramblers(game_state)
 
-                # Only spawn Ping's every other turn
-                # Sending more at once is better since attacks can only hit a single ping at a time
-                if game_state.turn_number % 2 == 1:
-                    # To simplify we will just check sending them from back left and right
-                    ping_spawn_location_options = [[13, 0], [14, 0]]
-                    best_location = self.least_damage_spawn_location(game_state, ping_spawn_location_options)
-                    game_state.attempt_spawn(PING, best_location, 1000)
 
-                # Lastly, if we have spare cores, let's build some Encryptors to boost our Pings' health.
-                encryptor_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
-                game_state.attempt_spawn(ENCRYPTOR, encryptor_locations)
+    def value_iteration(self, game_state, cost_function, discount, iterations):
+        # create value_map
+        np1Values = {(x, y) : 0 for y in range(14) for x in range(13 - y, 15 + y)}
+
+        for __ in range(iterations):
+            for s in game_state.get_defensive_states():
+                np1Values[s] = cost_function[s] + discount * \
+                        min([self.map_values[a] for a in
+                        game_state.get_possible_actions([s[0], s[1]])])
+            self.map_values = np1Values
+
+    def spawn_defense(self, game_state):
+        # friendly edges
+        friendly_edges = game_state.game_map.get_edge_locations(
+            game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+            game_state.game_map.BOTTOM_RIGHT)
+
+        # spawn defenses
+        spawn_locations = []
+        sortedKeys = sorted(self.map_values.items(), key=operator.itemgetter(1))
+        # sortedKeys = [sortedKeys[i] for i in range(len(sortedKeys) - 1, -1, -1)]
+        for s in sortedKeys:
+            if s not in friendly_edges:
+                spawn_locations.append([s[0][0], s[0][1]])
+        game_state.attempt_spawn(DESTRUCTOR, spawn_locations, 1)
+
+    def send_pings_if_survive(self, game_state):
+        possibleSpawnLocations = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_RIGHT)
+        location = self.least_damage_spawn_location(game_state,
+                self.filter_blocked_locations(possibleSpawnLocations, game_state))
+        numPings = math.floor(game_state.get_resource(BITS) / game_state.type_cost(PING))
+        if self.does_survive(game_state, location, numPings):
+            for _ in range(numPings):
+                game_state.attempt_spawn(PING, location)
+
+    def does_survive(self, game_state, location, numPings):
+        path = game_state.find_path_to_edge(location)
+        damage = 0
+        for path_location in path:
+            # Get number of enemy destructors that can attack the final location and multiply by destructor damage
+            damage += len(
+                game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(
+                DESTRUCTOR, game_state.config).damage
+        return numPings - damage > 0
+
+    def send_scramblers(self, game_state):
+        possibleSpawnLocations = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_RIGHT)
+        location = self.least_damage_spawn_location(game_state,
+                self.filter_blocked_locations(possibleSpawnLocations, game_state))
+        numScrambler = math.floor(game_state.get_resource(BITS) / game_state.type_cost(SCRAMBLER))
+        for _ in range(numScrambler):
+            game_state.attempt_spawn(SCRAMBLER, location)
+
+    def send_emp(self, game_state):
+        possibleSpawnLocations = game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(
+                game_state.game_map.BOTTOM_RIGHT)
+        location = self.least_damage_spawn_location(game_state,
+                self.filter_blocked_locations(possibleSpawnLocations, game_state))
+        numEMP = math.floor(game_state.get_resource(BITS) / game_state.type_cost(EMP))
+        for _ in range(numEMP):
+            game_state.attempt_spawn(numEMP, location)
+
 
     def update_map(self, game_state):
         # For every location along the barrier that was struck, we decrease the value by 100
         for location in self.scored_on_locations:
             self.map_values[(location[0], location[1])] -= self.damaged_cost_decrement
 
-        for location in self.enemy_attacker_spawn_locations:
-            path = game_state.find_path_to_edge(location)
-            damage = 0
-            for path_location in path:
-                # Adding damage done by all destructors that can attack that location
-                damage += len(game_state.get_attackers(path_location, 1)) * \
-                            gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
+        # for location in self.enemy_attacker_spawn_locations:
+        #     path = game_state.find_path_to_edge([location[0], location[1]])
+        #     damage = 0
+        #     for path_location in path:
+        #         # Adding damage done by all destructors that can attack that location
+        #         damage += len(game_state.get_attackers(path_location, 1)) * \
+        #                     gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
+        #
+        #         damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
+        #                   gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
+        #
+        #         if (path_location[0], path_location[1]) in self.map_values:
+        #             self.map_values[(path_location[0], path_location[1])] -= damage
 
-                damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
-                          gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
-
-                if (path_location in self.map_values):
-                    self.map_values[(path_location[0], path_location[1])] -= damage
-
-        return self.map_values
-
-    def build_defences(self, game_state):
-        """
-        Build basic defenses using hardcoded locations.
-        Remember to defend corners and avoid placing units in the front where enemy EMPs can attack them.
-        """
-        # Useful tool for setting up your base locations: https://www.kevinbai.design/terminal-map-maker
-        # More community tools available at: https://terminal.c1games.com/rules#Download
-
-        # Place destructors that attack enemy units
-        destructor_locations = [[0, 13], [27, 13], [8, 11], [19, 11], [13, 11], [14, 11]]
-        # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
-        game_state.attempt_spawn(DESTRUCTOR, destructor_locations)
-        
-        # Place filters in front of destructors to soak up damage for them
-        filter_locations = [[8, 12], [19, 12]]
-        game_state.attempt_spawn(FILTER, filter_locations)
-
-    def build_reactive_defense(self, game_state):
-        """
-        This function builds reactive defenses based on where the enemy scored on us from.
-        We can track where the opponent scored by looking at events in action frames 
-        as shown in the on_action_frame function
-        """
-        for location in self.scored_on_locations:
-            # Build destructor one space above so that it doesn't block our own edge spawn locations
-            build_location = [location[0], location[1]+1]
-            game_state.attempt_spawn(DESTRUCTOR, build_location)
 
     def stall_with_scramblers(self, game_state):
         """
@@ -165,17 +191,17 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         # We can spawn moving units on our edges so a list of all our edge locations
         friendly_edges = game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
-        
-        # Remove locations that are blocked by our own firewalls 
+
+        # Remove locations that are blocked by our own firewalls
         # since we can't deploy units there.
         deploy_locations = self.filter_blocked_locations(friendly_edges, game_state)
-        
+
         # While we have remaining bits to spend lets send out scramblers randomly.
         while game_state.get_resource(BITS) >= game_state.type_cost(SCRAMBLER) and len(deploy_locations) > 0:
             # Choose a random deploy location.
             deploy_index = random.randint(0, len(deploy_locations) - 1)
             deploy_location = deploy_locations[deploy_index]
-            
+
             game_state.attempt_spawn(SCRAMBLER, deploy_location)
             """
             We don't have to remove the location since multiple information 
