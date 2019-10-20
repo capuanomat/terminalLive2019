@@ -46,7 +46,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.scored_on_locations = []
 
         # Decrement cost of a state by this much when it hits our boundary
-        self.damaged_cost_decrement = 50
+        self.damaged_cost_decrement = 100
         self.left_enemy_edge = [(x, x + 14) for x in range(14)]
         self.right_enemy_edge = [(i + 14, 27 - i) for i in range(14)]
         self.enemy_attacker_spawn_locations = self.left_enemy_edge + self.right_enemy_edge
@@ -56,6 +56,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
 
     def on_turn(self, turn_state):
+        gamelib.debug_write(self.map_values)
         """
         This function is called every turn with the game state wrapper as
         an argument. The wrapper stores the state of the arena and has methods
@@ -86,26 +87,26 @@ class AlgoStrategy(gamelib.AlgoCore):
         # --- DEFENSE --- #
         # First, update the map
         self.update_map(game_state)
-        self.value_iteration(game_state, 0.9, 100)
+        self.value_iteration(game_state, self.map_values, 0.9, 100)
         # First, place basic defenses
         self.spawn_defense(game_state)
 
         # --- OFFENSE --- #
         self.send_pings_if_survive(game_state)
-        self.send_emp(game_state)
-        self.send_scramblers(game_state)
+        # self.send_emp(game_state)
+        # self.send_scramblers(game_state)
 
 
-    def value_iteration(self, game_state, discount, iterations):
+    def value_iteration(self, game_state, cost_function, discount, iterations):
         # create value_map
         np1Values = {(x, y) : 0 for y in range(14) for x in range(13 - y, 15 + y)}
 
         for __ in range(iterations):
             for s in game_state.get_defensive_states():
-                np1Values[s] = self.map_values[s] + discount * \
-                        max([self.map_values[a] for a in
+                np1Values[s] = cost_function[s] + discount * \
+                        min([self.map_values[a] for a in
                         game_state.get_possible_actions([s[0], s[1]])])
-            self.map_values = np1Values.copy()
+            self.map_values = np1Values
 
     def spawn_defense(self, game_state):
         # friendly edges
@@ -115,10 +116,12 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         # spawn defenses
         spawn_locations = []
-        for s in sorted(self.map_values.items(), key=operator.itemgetter(1)):
+        sortedKeys = sorted(self.map_values.items(), key=operator.itemgetter(1))
+        # sortedKeys = [sortedKeys[i] for i in range(len(sortedKeys) - 1, -1, -1)]
+        for s in sortedKeys:
             if s not in friendly_edges:
-                spawn_locations.append([s[0], s[1]])
-        game_state.attempt_spawn(DESTRUCTOR, spawn_locations)
+                spawn_locations.append([s[0][0], s[0][1]])
+        game_state.attempt_spawn(DESTRUCTOR, spawn_locations, 1)
 
     def send_pings_if_survive(self, game_state):
         possibleSpawnLocations = game_state.game_map.get_edge_locations(
@@ -167,19 +170,19 @@ class AlgoStrategy(gamelib.AlgoCore):
         for location in self.scored_on_locations:
             self.map_values[(location[0], location[1])] -= self.damaged_cost_decrement
 
-        for location in self.enemy_attacker_spawn_locations:
-            path = game_state.find_path_to_edge([location[0], location[1]])
-            damage = 0
-            for path_location in path:
-                # Adding damage done by all destructors that can attack that location
-                damage += len(game_state.get_attackers(path_location, 1)) * \
-                            gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
-
-                damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
-                          gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
-
-                if (path_location[0], path_location[1]) in self.map_values:
-                    self.map_values[(path_location[0], path_location[1])] -= damage
+        # for location in self.enemy_attacker_spawn_locations:
+        #     path = game_state.find_path_to_edge([location[0], location[1]])
+        #     damage = 0
+        #     for path_location in path:
+        #         # Adding damage done by all destructors that can attack that location
+        #         damage += len(game_state.get_attackers(path_location, 1)) * \
+        #                     gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
+        #
+        #         damage += len(game_state.get_attackers_encryptors(path_location, 1)) * \
+        #                   gamelib.GameUnit(ENCRYPTOR, game_state.config).damage
+        #
+        #         if (path_location[0], path_location[1]) in self.map_values:
+        #             self.map_values[(path_location[0], path_location[1])] -= damage
 
 
     def stall_with_scramblers(self, game_state):
